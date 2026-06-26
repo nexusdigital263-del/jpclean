@@ -1,6 +1,6 @@
-// /api/leads  — sincroniza os leads/conversas do CRM com o Supabase
-//  GET  -> lista os leads salvos
-//  POST -> salva (upsert) o array de leads enviado pelo CRM   Body: { "leads": [ ... ] }
+// /api/state  — sincroniza TODOS os dados do CRM (config, preços, modelos, agenda, usuários) no Supabase
+//  GET  -> retorna o documento único de estado
+//  POST -> salva (upsert) o documento   Body: { "state": { ... } }
 var sb = require("./_supabase.js");
 
 module.exports = async function handler(req, res) {
@@ -10,19 +10,16 @@ module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   if (req.method === "GET") {
-    const rows = await sb.sbSelect("leads", "select=data&order=updated_at.desc&limit=1000");
-    return res.status(200).json({ leads: rows.map(function (r) { return r.data; }).filter(Boolean) });
+    const rows = await sb.sbSelect("app_state", "id=eq.main&select=data");
+    return res.status(200).json({ state: rows[0] ? rows[0].data : null });
   }
 
   if (req.method === "POST") {
     try {
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-      const leads = Array.isArray(body.leads) ? body.leads : [];
-      if (!leads.length) return res.status(200).json({ ok: true, count: 0 });
-      const now = new Date().toISOString();
-      const rows = leads.map(function (l) { return { id: l.id, data: l, updated_at: now }; });
-      const ok = await sb.sbUpsert("leads", rows);
-      return res.status(200).json({ ok: ok, count: rows.length });
+      const state = body.state || {};
+      const ok = await sb.sbUpsert("app_state", { id: "main", data: state, updated_at: new Date().toISOString() });
+      return res.status(200).json({ ok: ok });
     } catch (e) {
       return res.status(500).json({ error: String((e && e.message) || e) });
     }
