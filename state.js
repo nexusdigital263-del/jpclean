@@ -1,6 +1,6 @@
 // POST /api/ai  — proxy seguro para a API da Anthropic (a chave fica só no servidor)
 // Body aceito: { "prompt": "..." }  ou  { "messages": [{role,content}], "max_tokens": 1024 }
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -26,15 +26,15 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: body.model || process.env.AI_MODEL || "claude-haiku-4-5",
         max_tokens: body.max_tokens || 1024,
-        messages,
+        messages: messages,
       }),
     });
 
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json({ error: (data.error && data.error.message) || "Erro na Anthropic" });
-    const text = (data.content || []).map((c) => c.text || "").join("").trim();
-    return res.status(200).json({ text });
+    const text = (data.content || []).map(function (c) { return c.text || ""; }).join("").trim();
+    return res.status(200).json({ text: text });
   } catch (e) {
     return res.status(500).json({ error: String((e && e.message) || e) });
   }
-}
+};
