@@ -1,4 +1,4 @@
-// POST /api/ai  — proxy seguro para a API da Anthropic (a chave fica só no servidor)
+// POST /api/ai  — proxy seguro para a OpenAI (a chave fica só no servidor)
 // Body aceito: { "prompt": "..." }  ou  { "messages": [{role,content}], "max_tokens": 1024 }
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -7,8 +7,8 @@ module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return res.status(500).json({ error: "ANTHROPIC_API_KEY não configurada na Vercel" });
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return res.status(500).json({ error: "OPENAI_API_KEY não configurada na Vercel" });
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
@@ -16,24 +16,21 @@ module.exports = async function handler(req, res) {
       ? body.messages
       : [{ role: "user", content: String(body.prompt || "") }];
 
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: { "content-type": "application/json", authorization: "Bearer " + key },
       body: JSON.stringify({
-        model: body.model || process.env.AI_MODEL || "claude-haiku-4-5",
+        model: body.model || process.env.AI_MODEL || "gpt-4o-mini",
         max_tokens: body.max_tokens || 1024,
+        temperature: 0.6,
         messages: messages,
       }),
     });
 
     const data = await r.json();
-    if (!r.ok) return res.status(r.status).json({ error: (data.error && data.error.message) || "Erro na Anthropic" });
-    const text = (data.content || []).map(function (c) { return c.text || ""; }).join("").trim();
-    return res.status(200).json({ text: text });
+    if (!r.ok) return res.status(r.status).json({ error: (data.error && data.error.message) || "Erro na OpenAI" });
+    const text = (((data.choices || [])[0] || {}).message || {}).content || "";
+    return res.status(200).json({ text: String(text).trim() });
   } catch (e) {
     return res.status(500).json({ error: String((e && e.message) || e) });
   }
