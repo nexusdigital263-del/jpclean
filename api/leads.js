@@ -23,6 +23,18 @@ async function sbSelect(table, qs) {
     return await r.json();
   } catch (e) { return []; }
 }
+async function sbDelete(table, ids) {
+  var URL = process.env.SUPABASE_URL, KEY = process.env.SUPABASE_SERVICE_KEY;
+  if (!URL || !KEY || !ids || !ids.length) return false;
+  try {
+    var list = ids.map(function (i) { return '"' + String(i).replace(/"/g, "") + '"'; }).join(",");
+    var r = await fetch(URL + "/rest/v1/" + table + "?id=in.(" + encodeURIComponent(list) + ")", {
+      method: "DELETE",
+      headers: { apikey: KEY, authorization: "Bearer " + KEY, Prefer: "return=minimal" }
+    });
+    return r.ok;
+  } catch (e) { return false; }
+}
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -36,12 +48,14 @@ module.exports = async function handler(req, res) {
     }
     if (req.method === "POST") {
       var body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      var deletedIds = Array.isArray(body.deletedIds) ? body.deletedIds : [];
+      if (deletedIds.length) await sbDelete("leads", deletedIds);
       var leads = Array.isArray(body.leads) ? body.leads : [];
-      if (!leads.length) return res.status(200).json({ ok: true, count: 0 });
+      if (!leads.length) return res.status(200).json({ ok: true, count: 0, deleted: deletedIds.length });
       var now = new Date().toISOString();
       var out = leads.map(function (l) { return { id: l.id, data: l, updated_at: now }; });
       var ok = await sbUpsert("leads", out);
-      return res.status(200).json({ ok: ok, count: out.length });
+      return res.status(200).json({ ok: ok, count: out.length, deleted: deletedIds.length });
     }
     return res.status(405).end();
   } catch (e) {
